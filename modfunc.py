@@ -11,6 +11,7 @@
 import vapoursynth as vs
 from vsutil import *
 import fvsfunc as fvf
+import mvsfunc as mvf
 from functools import partial
 core = vs.core
 
@@ -64,3 +65,21 @@ def adaptive_grain_mod(clip: vs.VideoNode,
         return mask
     return core.std.MaskedMerge(clip, grained, mask)
 
+def hybriddenoise_mod(clip: vs.VideoNode, 
+                  knl=0.5, 
+                  sigma=2, 
+                  radius1=1, 
+                  depth=16) -> vs.VideoNode:
+    """
+    Original *Func: kagefunc
+
+    Added functionalities:
+        - Work in float 32 bits
+        - Allow the depth to be changed at the output
+    """
+    if get_depth(clip) != 32:
+        clip = clip.resize.Point(format=clip.format.replace(bits_per_sample=32, sample_type=vs.FLOAT))
+    y = get_y(clip)
+    y = mvf.BM3D(y, radius1=radius1, sigma=sigma)
+    denoised = core.knlm.KNLMeansCL(clip, a=2, h=knl, d=3, device_type='gpu', device_id=0, channels='UV')
+    return fvf.Depth(core.std.ShufflePlanes([y, denoised], planes=[0, 1, 2], colorfamily=vs.YUV), depth=depth)
