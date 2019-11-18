@@ -17,10 +17,8 @@ core = vs.core
 
 
 def adaptive_grain_mod(clip: vs.VideoNode,
-                       strength=0.25,
-                       cstrength=0,
-                       hcorr=0,
-                       vcorr=None,
+                       strength=0.25, cstrength=0,
+                       hcorr=0, vcorr=None,
                        static=True,
                        luma_scaling=12,
                        show_mask=False) -> vs.VideoNode:
@@ -66,11 +64,7 @@ def adaptive_grain_mod(clip: vs.VideoNode,
     return core.std.MaskedMerge(clip, grained, mask)
 
 
-def hybriddenoise_mod(clip: vs.VideoNode, 
-                  knl=0.5, 
-                  sigma=2, 
-                  radius1=1, 
-                  depth=16) -> vs.VideoNode:
+def hybriddenoise_mod(clip: vs.VideoNode, knl=0.5, sigma=2, radius1=1, depth=16) -> vs.VideoNode:
     """
     Original *Func: kagefunc
 
@@ -87,9 +81,9 @@ def hybriddenoise_mod(clip: vs.VideoNode,
 
 
 def DescaleAA_mod(src: vs.VideoNode,
-                  w=None, h=720,  
+                  w=None, h=720,
                   kernel='bicubic', b=1/3, c=1/3, taps=3,
-                  thr=10, expand=3, inflate=3, showmask=False, 
+                  thr=10, expand=3, inflate=3, showmask=False,
                   opencl=False, device=0) -> vs.VideoNode:
     """
     Original *Func: fvsfunc
@@ -108,13 +102,13 @@ def DescaleAA_mod(src: vs.VideoNode,
         kernel = kernel[2:]
 
     w = getw(h)
-    
+
     ow = src.width
     oh = src.height
 
     bits = src.format.bits_per_sample
     sample_type = src.format.sample_type
-    
+
     if sample_type == vs.INTEGER:
         maxvalue = (1 << bits) - 1
         thr = thr * maxvalue // 0xFF
