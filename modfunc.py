@@ -65,6 +65,7 @@ def adaptive_grain_mod(clip: vs.VideoNode,
         return mask
     return core.std.MaskedMerge(clip, grained, mask)
 
+
 def hybriddenoise_mod(clip: vs.VideoNode, 
                   knl=0.5, 
                   sigma=2, 
@@ -83,3 +84,72 @@ def hybriddenoise_mod(clip: vs.VideoNode,
     y = mvf.BM3D(y, radius1=radius1, sigma=sigma)
     denoised = core.knlm.KNLMeansCL(clip, a=2, h=knl, d=3, device_type='gpu', device_id=0, channels='UV')
     return fvf.Depth(core.std.ShufflePlanes([y, denoised], planes=[0, 1, 2], colorfamily=vs.YUV), depth=depth)
+
+
+def DescaleAA_mod(src: vs.VideoNode,
+                  w=None, h=720,  
+                  kernel='bicubic', b=1/3, c=1/3, taps=3,
+                  thr=10, expand=3, inflate=3, showmask=False, 
+                  opencl=False, device=0) -> vs.VideoNode:
+    """
+    Original *Func: fvsfunc
+
+    Added functionalities:
+        - Automatic calculation of the width
+        - Allow using opencl for the upscale
+    """
+    try:
+        import nnedi3_rpow2 as nnp2  # https://gist.github.com/4re/342624c9e1a144a696c6
+    except ImportError:
+        import edi_rpow2 as nnp2  # https://gist.github.com/YamashitaRen/020c497524e794779d9c
+    import nnedi3_rpow2CL as nnp2CL # https://github.com/Ichunjo/nnedi3_rpow2CL/blob/master/nnedi3_rpow2CL.py
+
+    if kernel.lower().startswith('de'):
+        kernel = kernel[2:]
+
+    w = getw(h)
+    
+    ow = src.width
+    oh = src.height
+
+    bits = src.format.bits_per_sample
+    sample_type = src.format.sample_type
+    
+    if sample_type == vs.INTEGER:
+        maxvalue = (1 << bits) - 1
+        thr = thr * maxvalue // 0xFF
+    else:
+        maxvalue = 1
+        thr /= (235 - 16)
+
+    # Fix lineart
+    src_y = core.std.ShufflePlanes(src, planes=0, colorfamily=vs.GRAY)
+    deb = fvf.Resize(src_y, w, h, kernel=kernel, a1=b, a2=c, taps=taps, invks=True)
+    if opencl:
+        sharp = nnp2CL.nnedi3_rpow2CL(deb, 2, ow, oh, device=device)
+    else:
+        sharp = nnp2.nnedi3_rpow2(deb, 2, ow, oh)
+    thrlow = 4 * maxvalue // 0xFF if sample_type == vs.INTEGER else 4 / 0xFF
+    thrhigh = 24 * maxvalue // 0xFF if sample_type == vs.INTEGER else 24 / 0xFF
+    edgemask = core.std.Prewitt(sharp, planes=0)
+    edgemask = core.std.Expr(edgemask, "x {thrhigh} >= {maxvalue} x {thrlow} <= 0 x ? ?"
+                                       .format(thrhigh=thrhigh, maxvalue=maxvalue, thrlow=thrlow))
+    if kernel == "bicubic" and c >= 0.7:
+        edgemask = core.std.Maximum(edgemask, planes=0)
+    sharp = core.resize.Point(sharp, format=src.format.id)
+
+    # Restore true 1080p
+    deb_upscale = fvf.Resize(deb, ow, oh, kernel=kernel, a1=b, a2=c, taps=taps)
+    diffmask = core.std.Expr([src_y, deb_upscale], 'x y - abs')
+    for _ in range(expand):
+        diffmask = core.std.Maximum(diffmask, planes=0)
+    for _ in range(inflate):
+        diffmask = core.std.Inflate(diffmask, planes=0)
+
+    mask = core.std.Expr([diffmask,edgemask], 'x {thr} >= 0 y ?'.format(thr=thr))
+    mask = mask.std.Inflate().std.Deflate()
+    out = core.std.MaskedMerge(src, sharp, mask, planes=0)
+
+    if showmask:
+        out = mask
+    return out
