@@ -77,7 +77,7 @@ def hybriddenoise_mod(clip: vs.VideoNode, knl=0.5, sigma=2, radius1=1, depth=16)
     y = get_y(clip)
     y = mvf.BM3D(y, radius1=radius1, sigma=sigma)
     denoised = core.knlm.KNLMeansCL(clip, a=2, h=knl, d=3, device_type='gpu', device_id=0, channels='UV')
-    return fvf.Depth(core.std.ShufflePlanes([y, denoised], planes=[0, 1, 2], colorfamily=vs.YUV), depth=depth)
+    return fvf.Depth(core.std.ShufflePlanes([y, denoised], planes=[0, 1, 2], colorfamily=vs.YUV), depth)
 
 
 def DescaleAA_mod(src: vs.VideoNode,
@@ -101,7 +101,7 @@ def DescaleAA_mod(src: vs.VideoNode,
     if kernel.lower().startswith('de'):
         kernel = kernel[2:]
 
-    w = getw(h)
+    w = get_w(h)
 
     ow = src.width
     oh = src.height
