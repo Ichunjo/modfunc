@@ -147,3 +147,22 @@ def DescaleAA_mod(src: vs.VideoNode,
     if showmask:
         out = mask
     return out
+
+def to_444(clip, w=None, h=None, join=True):
+    """
+    Original location : Zastin's pastebin https://pastebin.com/u/Zastin
+    """
+    uv = [nnedi3x2(c) for c in split(clip)[1:]]
+    
+    if w in (None, clip.width) and h in (None, clip.height):
+        uv = [core.fmtc.resample(c, sy=0.5, flt=0) for c in uv]
+    else:
+        uv = [core.resize.Spline36(c, w, h, src_top=0.5) for c in uv]
+    
+    return core.std.ShufflePlanes([clip] + uv, [0]*3, vs.YUV) if join else uv
+
+def nnedi3x2(clip):
+    if hasattr(core, 'znedi3'):
+        return clip.std.Transpose().znedi3.nnedi3(1, 1, 0, 0, 4, 2).std.Transpose().znedi3.nnedi3(0, 1, 0, 0, 4, 2)
+    else:
+        return clip.std.Transpose().nnedi3.nnedi3(1, 1, 0, 0, 3, 1).std.Transpose().nnedi3.nnedi3(0, 1, 0, 0, 3, 1)
